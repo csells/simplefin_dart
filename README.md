@@ -72,16 +72,19 @@ next to the script with the following contents:
 
 ```
 SIMPLEFIN_ACCESS_URL=https://user:password@bridge.simplefin.org/simplefin
-# Optional: use this once to mint a new access URL.
-SIMPLEFIN_SETUP_TOKEN=...
 ```
 
-An annotated template is available at `example/example.env`; copy it to `.env`
-and fill in the values described in the comments.
+An annotated template is available at `example/example.env`; copy it to
+`example/.env`
+and follow the inline instructions. You can also generate the access URL via
+the CLI:
 
-Run the example with `dart run example/main.dart`. Pass a custom `.env` path as
-the first argument if needed. If only a setup token is specified, the script
-will claim an access URL and print it to stdout.
+```
+dart run example/main.dart --claim <SETUP_TOKEN>
+```
+
+Run the example with `dart run example/main.dart`. It will read the access URL
+from the `.env` file.
 
 ### Where to obtain the values
 
@@ -90,11 +93,10 @@ will claim an access URL and print it to stdout.
 2. After authentication, visit
    [https://bridge.simplefin.org/simplefin/create](https://bridge.simplefin.org/simplefin/create).
    This page generates a **Setup Token** (a long Base64 string).
-3. Copy the setup token into your `.env` file as `SIMPLEFIN_SETUP_TOKEN`.
-4. Run the example script once. It exchanges the setup token for an **Access
-   URL** and prints it. Replace the setup token in your `.env` file with the
-   newly returned `SIMPLEFIN_ACCESS_URL` for subsequent use.
-5. Keep the access URL secure—anyone with the URL can read the associated
+3. Run `dart run example/main.dart --claim <SETUP_TOKEN>`. The command exchanges
+   the setup token for an **Access URL** and prints `SIMPLEFIN_ACCESS_URL=...`.
+   Append or paste that line into your `.env` file.
+4. Keep the access URL secure—anyone with the URL can read the associated
    account data until you revoke it in the Bridge UI.
 
 ## Testing
