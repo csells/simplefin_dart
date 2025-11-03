@@ -75,16 +75,86 @@ SIMPLEFIN_ACCESS_URL=https://user:password@bridge.simplefin.org/simplefin
 ```
 
 An annotated template is available at `example/example.env`; copy it to
-`example/.env`
-and follow the inline instructions. You can also generate the access URL via
-the CLI:
+`example/.env` and follow the inline instructions. You can also generate the
+access URL via the CLI:
 
 ```
-dart run example/main.dart --claim <SETUP_TOKEN>
+dart run example/main.dart claim <SETUP_TOKEN>
 ```
 
-Run the example with `dart run example/main.dart`. It will read the access URL
-from the `.env` file.
+List account data with:
+
+```
+dart run example/main.dart accounts
+```
+
+List organizations referenced by the accounts payload:
+
+```
+dart run example/main.dart organizations
+```
+
+Inspect transactions (optionally filtering to a specific account):
+
+```
+dart run example/main.dart transactions [ACCOUNT_ID]
+```
+
+Use `--account <ID>` (repeatable) or `--access-url <URL>` to customise the
+accounts query; it always returns balances only. The `organizations` command
+lists the distinct institutions referenced by the accounts payload. The
+`transactions` command accepts `--start-date` (`-s`), `--end-date` (`-e`), `--pending`, and
+`--access-url`. All commands support `-f/--output-format` with `text`
+(default), `json`, or `csv`. The commands read `example/.env` automatically
+when `--access-url` is omitted.
+
+When no `--start-date` is supplied to `transactions`, the last 30 days of
+activity are requested (the SimpleFIN API caps ranges at 60 days). When
+`--end-date` is omitted, the current time is used.
+
+### Example CLI usage
+
+```
+$ dart run example/main.dart --help
+Usage: dart run example/main.dart <command> [arguments]
+
+Available commands:
+  c (claim)         Exchange a setup token for an access URL.
+  i (info)          Query the SimpleFIN bridge for supported versions.
+  a (accounts)      Retrieve account balances.
+  o (organizations) List organizations referenced by accounts.
+  t (transactions)  Retrieve transactions for a specific account.
+
+Run `dart run example/main.dart <command> --help` for details.
+```
+
+```
+$ dart run example/main.dart organizations --help
+Usage: dart run example/main.dart organizations [options]
+    -a, --access-url=<URL>       Override SIMPLEFIN_ACCESS_URL from .env (default: example/.env)
+    -f, --output-format=<FORMAT> Output as text, json, or csv (default: text)
+    -h, --help                   Show usage information
+
+$ dart run example/main.dart accounts --help
+Usage: dart run example/main.dart accounts [options]
+    -a, --access-url=<URL>       Override SIMPLEFIN_ACCESS_URL from .env (default: example/.env)
+    -A, --account=<ID>           Filter to a specific account (repeatable)
+    -f, --output-format=<FORMAT> Output as text, json, or csv (default: text)
+    -h, --help                   Show usage information
+
+$ dart run example/main.dart organizations --help
+Usage: dart run example/main.dart organizations [options]
+    -a, --access-url=<URL>       Override SIMPLEFIN_ACCESS_URL from .env (default: example/.env)
+    -f, --output-format=<FORMAT> Output as text, json, or csv (default: text)
+    -h, --help                   Show usage information
+```
+
+Markdown (`text`) output renders one block per account, `json` streams the API
+payload, and `csv` flattens accounts and transactions into rows suitable for
+spreadsheets. The `accounts` command reports only balance information and
+includes each account's `org-id`; use `organizations` for full institution
+metadata. The `transactions` command provides similar help and accepts an
+optional account ID to narrow results.
 
 ### Where to obtain the values
 
@@ -93,7 +163,7 @@ from the `.env` file.
 2. After authentication, visit
    [https://bridge.simplefin.org/simplefin/create](https://bridge.simplefin.org/simplefin/create).
    This page generates a **Setup Token** (a long Base64 string).
-3. Run `dart run example/main.dart --claim <SETUP_TOKEN>`. The command exchanges
+3. Run `dart run example/main.dart claim <SETUP_TOKEN>`. The command exchanges
    the setup token for an **Access URL** and prints `SIMPLEFIN_ACCESS_URL=...`.
    Append or paste that line into your `.env` file.
 4. Keep the access URL secure—anyone with the URL can read the associated
