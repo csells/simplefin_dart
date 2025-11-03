@@ -1,5 +1,5 @@
 name: simplefin_dart
-description: A starting point for Dart libraries or applications.
+description: Dart client for the SimpleFIN API.
 version: 0.1.0
 repository: https://github.com/csells/simplefin_dart
 homepage: https://github.com/csells/simplefin_dart
