@@ -39,23 +39,18 @@ Future<void> main(List<String> arguments) async {
     case 'claim':
     case 'c':
       await _handleClaim(command, parsers, scriptDir);
-      break;
     case 'info':
     case 'i':
       await _handleInfo(command, parsers);
-      break;
     case 'accounts':
     case 'a':
       await _handleAccounts(command, parsers, scriptDir);
-      break;
     case 'organizations':
     case 'o':
       await _handleOrganizations(command, parsers, scriptDir);
-      break;
     case 'transactions':
     case 't':
       await _handleTransactions(command, parsers, scriptDir);
-      break;
     default:
       stderr.writeln('Unknown command "${command.name}".');
       _printTopLevelUsage(parsers);
@@ -92,7 +87,8 @@ Future<void> _handleClaim(
     stdout
       ..writeln('SIMPLEFIN_ACCESS_URL=${credentials.accessUrl}')
       ..writeln(
-        'Redirect or copy the line above into your .env file (e.g. >> $envPathDisplay).',
+        'Redirect or copy the line above into your .env file '
+        '(e.g. >> $envPathDisplay).',
       );
   } on SimplefinException catch (error) {
     stderr.writeln('Failed to claim access URL: $error');
@@ -146,7 +142,7 @@ Future<void> _handleAccounts(
     exitCode = 64;
     return;
   }
-  final accessUrlOverride = (command['access-url'] as String?)
+  final accessUrlOverride = (command['url'] as String?)
       ?.trim()
       .maybeEmptyToNull();
   final envContext = _loadEnvContext(scriptDir);
@@ -155,45 +151,58 @@ Future<void> _handleAccounts(
     stderr
       ..writeln('No access URL provided.')
       ..writeln(
-        'Set SIMPLEFIN_ACCESS_URL in ${envContext.displayPath} or pass --access-url.',
+        'Set SIMPLEFIN_ACCESS_URL in ${envContext.displayPath} or pass --url.',
       );
     exitCode = 64;
     return;
   }
 
-  final accountFilters = List<String>.from(command['account'] as List);
-
+  final orgIdFilter = (command['org-id'] as String?)
+      ?.trim()
+      .maybeEmptyToNull();
   final credentials = SimplefinAccessCredentials.parse(accessUrl);
   final client = SimplefinAccessClient(credentials: credentials);
   try {
     final accountSet = await client.getAccounts(
-      accountIds: accountFilters.isEmpty ? null : accountFilters,
       balancesOnly: true,
     );
 
     _printBridgeErrors(accountSet.errors);
 
-    if (accountSet.accounts.isEmpty) {
-      stdout.writeln('No accounts returned by the bridge.');
+    final List<SimplefinAccount> accounts;
+    if (orgIdFilter == null) {
+      accounts = accountSet.accounts;
+    } else {
+      accounts = accountSet.accounts
+          .where((account) {
+            final orgId = account.org.id;
+            return orgId != null && orgId == orgIdFilter;
+          })
+          .toList();
+    }
+
+    if (accounts.isEmpty) {
+      stdout.writeln(
+        orgIdFilter == null
+            ? 'No accounts returned by the bridge.'
+            : 'No accounts found for organization "$orgIdFilter".',
+      );
       return;
     }
 
     switch (format) {
       case _OutputFormat.text:
-        _printAccountsMarkdown(accountSet);
-        break;
+        _printAccountsMarkdown(accounts);
       case _OutputFormat.json:
         stdout.writeln(
           _jsonEncoder.convert(
-            accountSet.accounts.map(_accountSummaryJson).toList(),
+            accounts.map(_accountSummaryJson).toList(),
           ),
         );
-        break;
       case _OutputFormat.csv:
         stdout.writeln(
-          _accountsCsv(accountSet, includeTransactions: false).trimRight(),
+          _accountsCsv(accounts, includeTransactions: false).trimRight(),
         );
-        break;
     }
   } on SimplefinException catch (error) {
     stderr.writeln('Failed to fetch accounts: $error');
@@ -222,7 +231,7 @@ Future<void> _handleOrganizations(
     return;
   }
 
-  final accessUrlOverride = (command['access-url'] as String?)
+  final accessUrlOverride = (command['url'] as String?)
       ?.trim()
       .maybeEmptyToNull();
   final envContext = _loadEnvContext(scriptDir);
@@ -231,7 +240,7 @@ Future<void> _handleOrganizations(
     stderr
       ..writeln('No access URL provided.')
       ..writeln(
-        'Set SIMPLEFIN_ACCESS_URL in ${envContext.displayPath} or pass --access-url.',
+        'Set SIMPLEFIN_ACCESS_URL in ${envContext.displayPath} or pass --url.',
       );
     exitCode = 64;
     return;
@@ -264,7 +273,6 @@ Future<void> _handleOrganizations(
     switch (format) {
       case _OutputFormat.text:
         _printOrganizationsMarkdown(organizations);
-        break;
       case _OutputFormat.json:
         stdout.writeln(
           _jsonEncoder.convert(
@@ -273,10 +281,8 @@ Future<void> _handleOrganizations(
                 : organizations.map(_organizationJson).toList(),
           ),
         );
-        break;
       case _OutputFormat.csv:
         stdout.writeln(_organizationsCsv(organizations).trimRight());
-        break;
     }
   } on SimplefinException catch (error) {
     stderr.writeln('Failed to fetch organizations: $error');
@@ -296,8 +302,7 @@ Future<void> _handleTransactions(
     return;
   }
 
-  final rest = command.rest;
-  final accountId = rest.isEmpty ? null : rest.first.trim().maybeEmptyToNull();
+  final accountId = (command['account'] as String?)?.trim().maybeEmptyToNull();
 
   _OutputFormat format;
   try {
@@ -307,7 +312,7 @@ Future<void> _handleTransactions(
     exitCode = 64;
     return;
   }
-  final accessUrlOverride = (command['access-url'] as String?)
+  final accessUrlOverride = (command['url'] as String?)
       ?.trim()
       .maybeEmptyToNull();
   final envContext = _loadEnvContext(scriptDir);
@@ -316,7 +321,7 @@ Future<void> _handleTransactions(
     stderr
       ..writeln('No access URL provided.')
       ..writeln(
-        'Set SIMPLEFIN_ACCESS_URL in ${envContext.displayPath} or pass --access-url.',
+        'Set SIMPLEFIN_ACCESS_URL in ${envContext.displayPath} or pass --url.',
       );
     exitCode = 64;
     return;
@@ -358,17 +363,16 @@ Future<void> _handleTransactions(
                 ? 'No transactions returned by the bridge.'
                 : 'No account returned for ID "$accountId".',
           );
-          break;
+          return;
         case _OutputFormat.json:
           stdout.writeln('[]');
-          break;
+          return;
         case _OutputFormat.csv:
           stdout.writeln(
             _transactionsCsv(const <SimplefinAccount>[]).trimRight(),
           );
-          break;
+          return;
       }
-      return;
     }
 
     final accounts = accountSet.accounts;
@@ -384,23 +388,21 @@ Future<void> _handleTransactions(
       switch (format) {
         case _OutputFormat.text:
           stdout.writeln('No transactions returned.');
-          break;
+          return;
         case _OutputFormat.json:
           stdout.writeln('[]');
-          break;
+          return;
         case _OutputFormat.csv:
           stdout.writeln(
             _transactionsCsv(const <SimplefinAccount>[]).trimRight(),
           );
-          break;
+          return;
       }
-      return;
     }
 
     switch (format) {
       case _OutputFormat.text:
         _printTransactionsMarkdown(transactions);
-        break;
       case _OutputFormat.json:
         stdout.writeln(
           _jsonEncoder.convert(
@@ -409,10 +411,8 @@ Future<void> _handleTransactions(
                 .toList(),
           ),
         );
-        break;
       case _OutputFormat.csv:
         stdout.writeln(_transactionsCsv(accounts).trimRight());
-        break;
     }
   } on SimplefinException catch (error) {
     stderr.writeln('Failed to fetch transactions: $error');
@@ -422,8 +422,8 @@ Future<void> _handleTransactions(
   }
 }
 
-void _printAccountsMarkdown(SimplefinAccountSet accountSet) {
-  for (final account in accountSet.accounts) {
+void _printAccountsMarkdown(Iterable<SimplefinAccount> accounts) {
+  for (final account in accounts) {
     stdout
       ..writeln('# Account: ${account.name}')
       ..writeln('- ID: ${account.id}')
@@ -467,9 +467,10 @@ void _printTransactionsMarkdown(
       ..writeln('- Amount: ${transaction.amount}')
       ..writeln('- Posted: ${transaction.posted.toUtc().toIso8601String()}');
     if (transaction.transactedAt != null) {
-      stdout.writeln(
-        '- Transacted At: ${transaction.transactedAt!.toUtc().toIso8601String()}',
-      );
+      final transactedAt = transaction.transactedAt!
+          .toUtc()
+          .toIso8601String();
+      stdout.writeln('- Transacted At: $transactedAt');
     }
     stdout
       ..writeln('- Pending: ${transaction.pending ? 'yes' : 'no'}')
@@ -478,7 +479,7 @@ void _printTransactionsMarkdown(
 }
 
 String _accountsCsv(
-  SimplefinAccountSet accountSet, {
+  Iterable<SimplefinAccount> accounts, {
   required bool includeTransactions,
 }) {
   final rows = <List<dynamic>>[
@@ -511,7 +512,7 @@ String _accountsCsv(
       ],
   ];
 
-  for (final account in accountSet.accounts) {
+  for (final account in accounts) {
     if (includeTransactions) {
       rows.add([
         'account',
@@ -581,18 +582,14 @@ Map<String, dynamic> _accountSummaryJson(SimplefinAccount account) =>
       (_, value) => value == null || (value is String && value.isEmpty),
     );
 
-String _organizationKey(SimplefinOrganization organization) {
-  return organization.id ??
-      organization.domain ??
-      organization.sfinUrl.toString();
-}
+String _organizationKey(SimplefinOrganization organization) =>
+    organization.id ?? organization.domain ?? organization.sfinUrl.toString();
 
-String _organizationDisplayName(SimplefinOrganization organization) {
-  return organization.name ??
-      organization.domain ??
-      organization.id ??
-      organization.sfinUrl.toString();
-}
+String _organizationDisplayName(SimplefinOrganization organization) =>
+    organization.name ??
+    organization.domain ??
+    organization.id ??
+    organization.sfinUrl.toString();
 
 Map<String, dynamic> _organizationJson(SimplefinOrganization organization) {
   final json = <String, dynamic>{
@@ -716,9 +713,7 @@ void _printOrganizationsUsage(_ParserBundle parsers) {
 
 void _printTransactionsUsage(_ParserBundle parsers) {
   stdout
-    ..writeln(
-      'Usage: dart run example/main.dart transactions [options] [account_id]',
-    )
+    ..writeln('Usage: dart run example/main.dart transactions [options]')
     ..writeln()
     ..writeln(parsers.transactions.usage);
 }
@@ -746,7 +741,8 @@ DateTime? _parseDateOption(String? rawValue) {
     return DateTime.parse(value).toUtc();
   } on FormatException {
     throw FormatException(
-      'Unable to parse date "$value". Use ISO-8601 (e.g. 2024-01-31T00:00:00Z) or epoch seconds.',
+      'Unable to parse date "$value". '
+      'Use ISO-8601 (e.g. 2024-01-31T00:00:00Z) or epoch seconds.',
     );
   }
 }
@@ -794,14 +790,7 @@ class _ParserBundle {
     required this.transactions,
   });
 
-  final ArgParser root;
-  final ArgParser claim;
-  final ArgParser info;
-  final ArgParser accounts;
-  final ArgParser organizations;
-  final ArgParser transactions;
-
-  static _ParserBundle build() {
+  factory _ParserBundle.build() {
     final root = ArgParser()
       ..addFlag(
         'help',
@@ -852,16 +841,16 @@ class _ParserBundle {
         help: 'Show usage information for accounts.',
       )
       ..addOption(
-        'access-url',
-        abbr: 'a',
+        'url',
+        abbr: 'u',
         help:
             'SimpleFIN access URL (default: value from example/.env if present).',
       )
-      ..addMultiOption(
-        'account',
-        abbr: 'A',
-        help: 'Restrict results to specific account IDs (repeatable).',
-        valueHelp: 'ID',
+      ..addOption(
+        'org-id',
+        abbr: 'o',
+        help: 'Restrict results to a specific organization ID.',
+        valueHelp: 'ORG_ID',
       )
       ..addOption(
         'output-format',
@@ -882,8 +871,8 @@ class _ParserBundle {
         help: 'Show usage information for organizations.',
       )
       ..addOption(
-        'access-url',
-        abbr: 'a',
+        'url',
+        abbr: 'u',
         help:
             'SimpleFIN access URL (default: value from example/.env if present).',
       )
@@ -906,8 +895,8 @@ class _ParserBundle {
         help: 'Show usage information for transactions.',
       )
       ..addOption(
-        'access-url',
-        abbr: 'a',
+        'url',
+        abbr: 'u',
         help:
             'SimpleFIN access URL (default: value from example/.env if present).',
       )
@@ -915,20 +904,28 @@ class _ParserBundle {
         'start-date',
         abbr: 's',
         help:
-            'Include transactions on/after this date (ISO-8601 or epoch seconds). '
+            'Include transactions on/after this date '
+            '(ISO-8601 or epoch seconds). '
             'Default: 30 days ago when omitted.',
       )
       ..addOption(
         'end-date',
         abbr: 'e',
         help:
-            'Include transactions before this date (ISO-8601 or epoch seconds). '
+            'Include transactions before this date '
+            '(ISO-8601 or epoch seconds). '
             'Default: now.',
       )
       ..addFlag(
         'pending',
         negatable: false,
         help: 'Include pending transactions when supported (default: off).',
+      )
+      ..addOption(
+        'account',
+        abbr: 'a',
+        help: 'Filter to a specific account ID.',
+        valueHelp: 'ID',
       )
       ..addOption(
         'output-format',
@@ -950,6 +947,13 @@ class _ParserBundle {
       transactions: transactions,
     );
   }
+
+  final ArgParser root;
+  final ArgParser claim;
+  final ArgParser info;
+  final ArgParser accounts;
+  final ArgParser organizations;
+  final ArgParser transactions;
 }
 
 class _EnvContext {

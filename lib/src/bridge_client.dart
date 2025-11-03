@@ -9,6 +9,7 @@ import 'models.dart';
 
 /// HTTP client for interacting with a SimpleFIN Bridge server.
 class SimplefinBridgeClient {
+  /// Creates a client targeting the provided bridge [root] URL.
   SimplefinBridgeClient({
     Uri? root,
     http.Client? httpClient,
@@ -17,7 +18,10 @@ class SimplefinBridgeClient {
        _httpClient = httpClient ?? http.Client(),
        _ownsClient = httpClient == null;
 
+  /// Base URI for all bridge API requests.
   final Uri root;
+
+  /// Value supplied as the HTTP `User-Agent` header.
   final String userAgent;
 
   final http.Client _httpClient;

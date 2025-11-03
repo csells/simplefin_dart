@@ -9,6 +9,7 @@ import 'models.dart';
 
 /// Client that uses SimpleFIN access credentials to retrieve account data.
 class SimplefinAccessClient {
+  /// Creates a client that issues requests with the provided [credentials].
   SimplefinAccessClient({
     required this.credentials,
     http.Client? httpClient,
@@ -16,7 +17,10 @@ class SimplefinAccessClient {
   }) : _httpClient = httpClient ?? http.Client(),
        _ownsClient = httpClient == null;
 
+  /// Credentials used to authenticate against the SimpleFIN server.
   final SimplefinAccessCredentials credentials;
+
+  /// Value supplied as the HTTP `User-Agent` header.
   final String userAgent;
 
   final http.Client _httpClient;

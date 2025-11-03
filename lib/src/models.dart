@@ -4,9 +4,11 @@ import 'exceptions.dart';
 
 /// Metadata describing the capabilities of a SimpleFIN Bridge server.
 class SimplefinBridgeInfo {
+  /// Creates metadata describing available protocol [versions].
   SimplefinBridgeInfo({required Iterable<String> versions})
     : versions = List.unmodifiable(versions);
 
+  /// Parses bridge metadata from a JSON response.
   factory SimplefinBridgeInfo.fromJson(Map<String, dynamic> json) {
     final rawVersions = json['versions'];
     if (rawVersions is! List) {
@@ -26,19 +28,23 @@ class SimplefinBridgeInfo {
     );
   }
 
+  /// Supported SimpleFIN protocol versions reported by the bridge.
   final List<String> versions;
 
+  /// Converts the bridge metadata back into JSON.
   Map<String, dynamic> toJson() => {'versions': versions};
 }
 
 /// Structured response returned by the SimpleFIN `/accounts` endpoint.
 class SimplefinAccountSet {
+  /// Creates a response wrapper containing [errors] and [accounts].
   SimplefinAccountSet({
     required Iterable<String> errors,
     required Iterable<SimplefinAccount> accounts,
   }) : errors = List.unmodifiable(errors),
        accounts = List.unmodifiable(accounts);
 
+  /// Parses an account set returned by a SimpleFIN server.
   factory SimplefinAccountSet.fromJson(Map<String, dynamic> json) {
     final errorsField = json['errors'];
     if (errorsField is! List) {
@@ -74,9 +80,13 @@ class SimplefinAccountSet {
     return SimplefinAccountSet(errors: errors, accounts: accounts);
   }
 
+  /// Informational messages reported by the bridge.
   final List<String> errors;
+
+  /// Collection of accounts returned by the server.
   final List<SimplefinAccount> accounts;
 
+  /// Converts the account set to a JSON representation.
   Map<String, dynamic> toJson() => {
     'errors': errors,
     'accounts': accounts.map((account) => account.toJson()).toList(),
@@ -85,19 +95,21 @@ class SimplefinAccountSet {
 
 /// Represents a financial account exposed by a SimpleFIN server.
 class SimplefinAccount {
+  /// Creates an account definition returned by the SimpleFIN API.
   SimplefinAccount({
     required this.org,
     required this.id,
     required this.name,
     required this.currency,
     required this.balance,
-    this.availableBalance,
     required this.balanceDate,
+    this.availableBalance,
     Iterable<SimplefinTransaction> transactions = const [],
     Map<String, dynamic>? extra,
   }) : transactions = List.unmodifiable(transactions),
        extra = extra == null ? null : Map.unmodifiable(extra);
 
+  /// Parses an account object returned by the SimpleFIN API.
   factory SimplefinAccount.fromJson(Map<String, dynamic> json) {
     final orgField = json['org'];
     if (orgField is! Map<String, dynamic>) {
@@ -153,16 +165,34 @@ class SimplefinAccount {
     );
   }
 
+  /// Organization that owns the account.
   final SimplefinOrganization org;
+
+  /// Account identifier assigned by the provider.
   final String id;
+
+  /// Human-friendly account name.
   final String name;
+
+  /// ISO-4217 currency code for monetary values.
   final String currency;
+
+  /// Current posted balance.
   final Decimal balance;
+
+  /// Provider-reported available balance, when supplied.
   final Decimal? availableBalance;
+
+  /// Timestamp when the balance was last refreshed.
   final DateTime balanceDate;
+
+  /// Transactions returned alongside the account.
   final List<SimplefinTransaction> transactions;
+
+  /// Provider-specific metadata.
   final Map<String, dynamic>? extra;
 
+  /// Converts the account into its JSON wire format.
   Map<String, dynamic> toJson() => {
     'org': org.toJson(),
     'id': id,
@@ -182,6 +212,7 @@ class SimplefinAccount {
 
 /// Immutable view of a transaction within a SimpleFIN account.
 class SimplefinTransaction {
+  /// Creates a transaction returned by the SimpleFIN API.
   SimplefinTransaction({
     required this.id,
     required this.posted,
@@ -192,6 +223,7 @@ class SimplefinTransaction {
     Map<String, dynamic>? extra,
   }) : extra = extra == null ? null : Map.unmodifiable(extra);
 
+  /// Parses a transaction object returned by the SimpleFIN API.
   factory SimplefinTransaction.fromJson(Map<String, dynamic> json) {
     final id = _expectString(json, 'id');
     final posted = _parseDateTime(json['posted'], 'posted');
@@ -201,15 +233,18 @@ class SimplefinTransaction {
         ? _parseDateTime(json['transacted_at'], 'transacted_at')
         : null;
     final pendingValue = json['pending'];
-    final pending = pendingValue == null
-        ? false
-        : pendingValue is bool
-        ? pendingValue
-        : (pendingValue is num
-              ? pendingValue != 0
-              : throw SimplefinDataFormatException(
-                  '"pending" must be a boolean when present.',
-                ));
+    late final bool pending;
+    if (pendingValue == null) {
+      pending = false;
+    } else if (pendingValue is bool) {
+      pending = pendingValue;
+    } else if (pendingValue is num) {
+      pending = pendingValue != 0;
+    } else {
+      throw SimplefinDataFormatException(
+        '"pending" must be a boolean when present.',
+      );
+    }
 
     final extraField = json['extra'];
     Map<String, dynamic>? extra;
@@ -233,14 +268,28 @@ class SimplefinTransaction {
     );
   }
 
+  /// Identifier for the transaction.
   final String id;
+
+  /// Date the transaction posted.
   final DateTime posted;
+
+  /// Monetary amount of the transaction.
   final Decimal amount;
+
+  /// Provider-supplied description.
   final String description;
+
+  /// Timestamp when the transaction occurred, when provided.
   final DateTime? transactedAt;
+
+  /// Indicates whether the transaction is still pending.
   final bool pending;
+
+  /// Additional provider metadata.
   final Map<String, dynamic>? extra;
 
+  /// Converts the transaction into its JSON wire format.
   Map<String, dynamic> toJson() => {
     'id': id,
     'posted': posted.toUtc().millisecondsSinceEpoch ~/ 1000,
@@ -255,14 +304,16 @@ class SimplefinTransaction {
 
 /// Description of the financial institution that owns a SimpleFIN account.
 class SimplefinOrganization {
+  /// Creates an organization definition returned by the SimpleFIN API.
   SimplefinOrganization({
-    this.domain,
     required this.sfinUrl,
+    this.domain,
     this.name,
     this.url,
     this.id,
   });
 
+  /// Parses an organization object returned by the SimpleFIN API.
   factory SimplefinOrganization.fromJson(Map<String, dynamic> json) {
     final sfinUrlString = _expectString(json, 'sfin-url');
     late final Uri sfinUrl;
@@ -302,12 +353,22 @@ class SimplefinOrganization {
     );
   }
 
+  /// Domain name associated with the organization, if available.
   final String? domain;
+
+  /// Bridge URL for the organization.
   final Uri sfinUrl;
+
+  /// Human-friendly organization name.
   final String? name;
+
+  /// Public website for the organization.
   final Uri? url;
+
+  /// Organization identifier included by the provider.
   final String? id;
 
+  /// Converts the organization into its JSON wire representation.
   Map<String, dynamic> toJson() => {
     if (domain != null) 'domain': domain,
     'sfin-url': sfinUrl.toString(),

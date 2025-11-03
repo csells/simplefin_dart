@@ -40,7 +40,10 @@ class SimplefinSetupToken {
     return SimplefinSetupToken._(cleaned, claimUri);
   }
 
+  /// Original string supplied by the user.
   final String value;
+
+  /// Claim endpoint resolved from the setup token.
   final Uri claimUri;
 
   static List<int> _decodeBase64(String token) {
@@ -74,6 +77,7 @@ class SimplefinAccessCredentials {
     required this.password,
   });
 
+  /// Parses a SimpleFIN access [url] into credential components.
   factory SimplefinAccessCredentials.parse(String url) {
     final trimmed = url.trim();
     if (trimmed.isEmpty) {
@@ -127,9 +131,16 @@ class SimplefinAccessCredentials {
     );
   }
 
+  /// Raw access URL returned by the bridge claim endpoint.
   final String accessUrl;
+
+  /// Base URI to which endpoint segments are appended.
   final Uri baseUri;
+
+  /// Username embedded in the access URL for HTTP basic authentication.
   final String username;
+
+  /// Password embedded in the access URL for HTTP basic authentication.
   final String password;
 
   /// Value to use for the `Authorization` header in HTTP requests.
