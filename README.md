@@ -103,10 +103,10 @@ dart run example/main.dart transactions [ACCOUNT_ID]
 Use `--account <ID>` (repeatable) or `--access-url <URL>` to customise the
 accounts query; it always returns balances only. The `organizations` command
 lists the distinct institutions referenced by the accounts payload. The
-`transactions` command accepts `--start-date` (`-s`), `--end-date` (`-e`), `--pending`, and
-`--access-url`. All commands support `-f/--output-format` with `text`
-(default), `json`, or `csv`. The commands read `example/.env` automatically
-when `--access-url` is omitted.
+`transactions` command accepts `--start-date` (`-s`), `--end-date` (`-e`),
+`--pending`, and `--access-url`. All commands support `-f/--output-format`
+with `text` (default), `json`, or `csv`. The commands read `example/.env`
+automatically when `--access-url` is omitted.
 
 When no `--start-date` is supplied to `transactions`, the last 30 days of
 activity are requested (the SimpleFIN API caps ranges at 60 days). When
@@ -129,12 +129,6 @@ Run `dart run example/main.dart <command> --help` for details.
 ```
 
 ```
-$ dart run example/main.dart organizations --help
-Usage: dart run example/main.dart organizations [options]
-    -a, --access-url=<URL>       Override SIMPLEFIN_ACCESS_URL from .env (default: example/.env)
-    -f, --output-format=<FORMAT> Output as text, json, or csv (default: text)
-    -h, --help                   Show usage information
-
 $ dart run example/main.dart accounts --help
 Usage: dart run example/main.dart accounts [options]
     -a, --access-url=<URL>       Override SIMPLEFIN_ACCESS_URL from .env (default: example/.env)
@@ -147,14 +141,25 @@ Usage: dart run example/main.dart organizations [options]
     -a, --access-url=<URL>       Override SIMPLEFIN_ACCESS_URL from .env (default: example/.env)
     -f, --output-format=<FORMAT> Output as text, json, or csv (default: text)
     -h, --help                   Show usage information
+
+$ dart run example/main.dart transactions --help
+Usage: dart run example/main.dart transactions [options] [account_id]
+    -a, --access-url=<URL>       Override SIMPLEFIN_ACCESS_URL from .env (default: example/.env)
+    -s, --start-date=<DATE>      ISO-8601 or epoch seconds inclusive (default: 30 days ago)
+    -e, --end-date=<DATE>        ISO-8601 or epoch seconds exclusive (default: now)
+        --pending                Include pending transactions (default: off)
+    -f, --output-format=<FORMAT> Output as text, json, or csv (default: text)
+    -h, --help                   Show usage information
 ```
 
 Markdown (`text`) output renders one block per account, `json` streams the API
 payload, and `csv` flattens accounts and transactions into rows suitable for
 spreadsheets. The `accounts` command reports only balance information and
 includes each account's `org-id`; use `organizations` for full institution
-metadata. The `transactions` command provides similar help and accepts an
-optional account ID to narrow results.
+metadata. The `transactions` command prints a block per transaction and always
+includes the owning `account-id`; JSON returns an array of transaction objects
+and CSV emits one row per transaction. An optional account ID can be supplied
+to narrow the results.
 
 ### Where to obtain the values
 
