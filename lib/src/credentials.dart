@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'exceptions.dart';
+import 'utils/uri_builder.dart';
 
 /// Representation of the temporary setup token that a user creates via the
 /// SimpleFIN Bridge UI. The token is Base64 encoded and resolves to the
@@ -153,23 +154,7 @@ class SimplefinAccessCredentials {
   Uri endpointUri(
     List<String> additionalSegments, {
     Map<String, dynamic>? queryParameters,
-  }) {
-    final normalizedSegments = baseUri.pathSegments
-        .where((segment) => segment.isNotEmpty)
-        .toList();
-    final allSegments = [
-      ...normalizedSegments,
-      ...additionalSegments.where((segment) => segment.isNotEmpty),
-    ];
-
-    return Uri(
-      scheme: baseUri.scheme,
-      host: baseUri.host,
-      port: baseUri.hasPort ? baseUri.port : null,
-      pathSegments: allSegments,
-      queryParameters: queryParameters?.isEmpty ?? true
-          ? null
-          : queryParameters,
-    );
-  }
+  }) =>
+      buildUri(baseUri, additionalSegments,
+          queryParameters: queryParameters);
 }

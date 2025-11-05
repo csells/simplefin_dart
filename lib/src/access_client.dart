@@ -1,21 +1,23 @@
-import 'dart:convert';
-
 import 'package:http/http.dart' as http;
 
 import 'constants.dart';
 import 'credentials.dart';
 import 'exceptions.dart';
 import 'models.dart';
+import 'utils/http_client_ownership.dart';
+import 'utils/json_parser.dart';
+import 'utils/time_utils.dart';
 
 /// Client that uses SimpleFIN access credentials to retrieve account data.
-class SimplefinAccessClient {
+class SimplefinAccessClient with HttpClientOwnership {
   /// Creates a client that issues requests with the provided [credentials].
   SimplefinAccessClient({
     required this.credentials,
     http.Client? httpClient,
     this.userAgent = defaultUserAgent,
-  }) : _httpClient = httpClient ?? http.Client(),
-       _ownsClient = httpClient == null;
+  }) {
+    initHttpClient(httpClient);
+  }
 
   /// Credentials used to authenticate against the SimpleFIN server.
   final SimplefinAccessCredentials credentials;
@@ -23,10 +25,9 @@ class SimplefinAccessClient {
   /// Value supplied as the HTTP `User-Agent` header.
   final String userAgent;
 
-  final http.Client _httpClient;
-  final bool _ownsClient;
-
   /// Retrieves account and transaction data from the SimpleFIN server.
+  ///
+  /// Throws [ArgumentError] if [startDate] is after [endDate].
   Future<SimplefinAccountSet> getAccounts({
     DateTime? startDate,
     DateTime? endDate,
@@ -34,13 +35,21 @@ class SimplefinAccessClient {
     Iterable<String>? accountIds,
     bool balancesOnly = false,
   }) async {
+    // Validate date range
+    if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+      throw ArgumentError(
+        'startDate must be before or equal to endDate. '
+        'Got startDate=$startDate, endDate=$endDate',
+      );
+    }
+
     final queryParameters = <String, dynamic>{};
 
     if (startDate != null) {
-      queryParameters['start-date'] = _toEpochSeconds(startDate).toString();
+      queryParameters['start-date'] = toEpochSeconds(startDate).toString();
     }
     if (endDate != null) {
-      queryParameters['end-date'] = _toEpochSeconds(endDate).toString();
+      queryParameters['end-date'] = toEpochSeconds(endDate).toString();
     }
     if (includePending) {
       queryParameters['pending'] = '1';
@@ -57,7 +66,7 @@ class SimplefinAccessClient {
       'accounts',
     ], queryParameters: queryParameters.isEmpty ? null : queryParameters);
 
-    final response = await _httpClient.get(uri, headers: _headers());
+    final response = await httpClient.get(uri, headers: _headers());
     if (response.statusCode != 200) {
       throw SimplefinApiException(
         uri: uri,
@@ -67,30 +76,18 @@ class SimplefinAccessClient {
       );
     }
 
-    Map<String, dynamic> jsonBody;
-    try {
-      final decoded = json.decode(response.body);
-      if (decoded is! Map<String, dynamic>) {
-        throw const FormatException('Expected JSON object.');
-      }
-      jsonBody = decoded;
-    } on FormatException catch (error) {
-      throw SimplefinApiException(
-        uri: uri,
-        statusCode: response.statusCode,
-        responseBody: response.body,
-        message: 'Accounts response is not valid JSON: ${error.message}',
-      );
-    }
-
+    final jsonBody = parseJsonObject(
+      response.body,
+      uri: uri,
+      statusCode: response.statusCode,
+      errorContext: 'Accounts response',
+    );
     return SimplefinAccountSet.fromJson(jsonBody);
   }
 
   /// Releases the underlying HTTP client if this instance created it.
   void close() {
-    if (_ownsClient) {
-      _httpClient.close();
-    }
+    closeHttpClient();
   }
 
   Map<String, String> _headers() => {
@@ -99,6 +96,3 @@ class SimplefinAccessClient {
     'Authorization': credentials.basicAuthHeaderValue,
   };
 }
-
-int _toEpochSeconds(DateTime value) =>
-    value.toUtc().millisecondsSinceEpoch ~/ 1000;

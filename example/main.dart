@@ -426,13 +426,7 @@ void _printAccountsMarkdown(
   Iterable<SimplefinAccount> accounts,
   List<String> serverMessages,
 ) {
-  if (serverMessages.isNotEmpty) {
-    stdout.writeln('# Server Messages');
-    for (final message in serverMessages) {
-      stdout.writeln('- $message');
-    }
-    stdout.writeln();
-  }
+  _printServerMessages(serverMessages);
 
   for (final account in accounts) {
     stdout
@@ -456,13 +450,7 @@ void _printOrganizationsMarkdown(
   List<SimplefinOrganization> organizations,
   List<String> serverMessages,
 ) {
-  if (serverMessages.isNotEmpty) {
-    stdout.writeln('# Server Messages');
-    for (final message in serverMessages) {
-      stdout.writeln('- $message');
-    }
-    stdout.writeln();
-  }
+  _printServerMessages(serverMessages);
 
   for (final org in organizations) {
     stdout
@@ -480,13 +468,7 @@ void _printTransactionsMarkdown(
   transactions,
   List<String> serverMessages,
 ) {
-  if (serverMessages.isNotEmpty) {
-    stdout.writeln('# Server Messages');
-    for (final message in serverMessages) {
-      stdout.writeln('- $message');
-    }
-    stdout.writeln();
-  }
+  _printServerMessages(serverMessages);
 
   for (final pair in transactions) {
     final account = pair.account;
@@ -507,13 +489,24 @@ void _printTransactionsMarkdown(
   }
 }
 
+void _printServerMessages(List<String> serverMessages) {
+  if (serverMessages.isEmpty) return;
+
+  stdout.writeln('# Server Messages');
+  for (final message in serverMessages) {
+    stdout.writeln('- $message');
+  }
+  stdout.writeln();
+}
+
+String _formatServerMessagesForCsv(List<String> serverMessages) =>
+    serverMessages.isEmpty ? '' : serverMessages.join('; ');
+
 String _accountsCsv(
   Iterable<SimplefinAccount> accounts,
   List<String> serverMessages,
 ) {
-  final serverMessagesField = serverMessages.isEmpty
-      ? ''
-      : serverMessages.join('; ');
+  final serverMessagesField = _formatServerMessagesForCsv(serverMessages);
 
   final rows = <List<dynamic>>[
     [
@@ -587,9 +580,7 @@ String _transactionsCsv(
   List<SimplefinAccount> accounts,
   List<String> serverMessages,
 ) {
-  final serverMessagesField = serverMessages.isEmpty
-      ? ''
-      : serverMessages.join('; ');
+  final serverMessagesField = _formatServerMessagesForCsv(serverMessages);
 
   final rows = <List<dynamic>>[
     [
@@ -642,9 +633,7 @@ String _organizationsCsv(
   List<SimplefinOrganization> organizations,
   List<String> serverMessages,
 ) {
-  final serverMessagesField = serverMessages.isEmpty
-      ? ''
-      : serverMessages.join('; ');
+  final serverMessagesField = _formatServerMessagesForCsv(serverMessages);
 
   final rows = <List<dynamic>>[
     ['id', 'name', 'domain', 'url', 'sfin_url', 'server_messages'],

@@ -1,6 +1,7 @@
 import 'package:decimal/decimal.dart';
 
 import 'exceptions.dart';
+import 'utils/time_utils.dart';
 
 /// Metadata describing the capabilities of a SimpleFIN Bridge server.
 class SimplefinBridgeInfo {
@@ -84,6 +85,23 @@ class SimplefinAccountSet {
   }
 
   /// Informational messages reported by the bridge.
+  ///
+  /// These messages communicate system-wide conditions such as authentication
+  /// issues, rate limits, or account sync problems. They are typically not
+  /// fatal errors, but should be surfaced to end users. Messages are returned
+  /// from the SimpleFIN server's "errors" field in the API response, despite
+  /// the field name being "errors" in the wire format.
+  ///
+  /// Example messages:
+  /// - "Account sync temporarily unavailable for savings account"
+  /// - "Rate limit approaching - consider reducing polling frequency"
+  ///
+  /// These messages are preserved when filtering account sets:
+  /// ```dart
+  /// final accountSet = await client.getAccounts();
+  /// final filtered = accountSet.filterByOrganizationId('org_123');
+  /// // filtered.serverMessages still contains all original messages
+  /// ```
   final List<String> serverMessages;
 
   /// Collection of accounts returned by the server.
@@ -204,7 +222,7 @@ class SimplefinAccount {
     'balance': balance.toString(),
     if (availableBalance != null)
       'available-balance': availableBalance.toString(),
-    'balance-date': balanceDate.toUtc().millisecondsSinceEpoch ~/ 1000,
+    'balance-date': toEpochSeconds(balanceDate),
     if (transactions.isNotEmpty)
       'transactions': transactions
           .map((transaction) => transaction.toJson())
@@ -295,11 +313,10 @@ class SimplefinTransaction {
   /// Converts the transaction into its JSON wire format.
   Map<String, dynamic> toJson() => {
     'id': id,
-    'posted': posted.toUtc().millisecondsSinceEpoch ~/ 1000,
+    'posted': toEpochSeconds(posted),
     'amount': amount.toString(),
     'description': description,
-    if (transactedAt != null)
-      'transacted_at': transactedAt!.toUtc().millisecondsSinceEpoch ~/ 1000,
+    if (transactedAt != null) 'transacted_at': toEpochSeconds(transactedAt!),
     if (pending) 'pending': pending,
     if (extra != null) 'extra': extra,
   };
@@ -416,7 +433,7 @@ Decimal _parseDecimal(Object? value, String fieldName) {
 
 DateTime _parseDateTime(Object? value, String fieldName) {
   final seconds = _parseEpochSeconds(value, fieldName);
-  return DateTime.fromMillisecondsSinceEpoch(seconds * 1000, isUtc: true);
+  return fromEpochSeconds(seconds);
 }
 
 int _parseEpochSeconds(Object? value, String fieldName) {
