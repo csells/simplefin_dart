@@ -192,7 +192,6 @@ Future<void> _handleAccounts(
           _accountsCsv(
             accountSet.accounts,
             accountSet.serverMessages,
-            includeTransactions: false,
           ).trimRight(),
         );
     }
@@ -510,102 +509,38 @@ void _printTransactionsMarkdown(
 
 String _accountsCsv(
   Iterable<SimplefinAccount> accounts,
-  List<String> serverMessages, {
-  required bool includeTransactions,
-}) {
+  List<String> serverMessages,
+) {
   final serverMessagesField = serverMessages.isEmpty
       ? ''
-      : serverMessages.map((msg) => '"$msg"').join(';');
+      : serverMessages.join('; ');
 
   final rows = <List<dynamic>>[
-    if (includeTransactions)
-      [
-        'record_type',
-        'account_id',
-        'account_name',
-        'currency',
-        'balance',
-        'available_balance',
-        'balance_date',
-        'org_id',
-        'transaction_id',
-        'posted',
-        'amount',
-        'description',
-        'pending',
-        'transacted_at',
-        'server_messages',
-      ]
-    else
-      [
-        'account_id',
-        'account_name',
-        'currency',
-        'balance',
-        'available_balance',
-        'balance_date',
-        'org_id',
-        'server_messages',
-      ],
+    [
+      'account_id',
+      'account_name',
+      'currency',
+      'balance',
+      'available_balance',
+      'balance_date',
+      'org_id',
+      'server_messages',
+    ],
   ];
 
   var isFirstRow = true;
   for (final account in accounts) {
-    if (includeTransactions) {
-      rows.add([
-        'account',
-        account.id,
-        account.name,
-        account.currency,
-        account.balance.toString(),
-        account.availableBalance?.toString() ?? '',
-        account.balanceDate.toUtc().toIso8601String(),
-        account.org.id ?? '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        if (isFirstRow) serverMessagesField else '',
-      ]);
-      isFirstRow = false;
-    } else {
-      rows.add([
-        account.id,
-        account.name,
-        account.currency,
-        account.balance.toString(),
-        account.availableBalance?.toString() ?? '',
-        account.balanceDate.toUtc().toIso8601String(),
-        account.org.id ?? '',
-        if (isFirstRow) serverMessagesField else '',
-      ]);
-      isFirstRow = false;
-      continue;
-    }
-
-    for (final transaction in account.transactions) {
-      rows.add([
-        'transaction',
-        account.id,
-        account.name,
-        account.currency,
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        transaction.id,
-        transaction.posted.toUtc().toIso8601String(),
-        transaction.amount.toString(),
-        transaction.description,
-        transaction.pending,
-        transaction.transactedAt?.toUtc().toIso8601String() ?? '',
-        '',
-      ]);
-    }
+    rows.add([
+      account.id,
+      account.name,
+      account.currency,
+      account.balance.toString(),
+      account.availableBalance?.toString() ?? '',
+      account.balanceDate.toUtc().toIso8601String(),
+      account.org.id ?? '',
+      if (isFirstRow) serverMessagesField else '',
+    ]);
+    isFirstRow = false;
   }
 
   return const ListToCsvConverter().convert(rows);
@@ -654,7 +589,7 @@ String _transactionsCsv(
 ) {
   final serverMessagesField = serverMessages.isEmpty
       ? ''
-      : serverMessages.map((msg) => '"$msg"').join(';');
+      : serverMessages.join('; ');
 
   final rows = <List<dynamic>>[
     [
@@ -709,7 +644,7 @@ String _organizationsCsv(
 ) {
   final serverMessagesField = serverMessages.isEmpty
       ? ''
-      : serverMessages.map((msg) => '"$msg"').join(';');
+      : serverMessages.join('; ');
 
   final rows = <List<dynamic>>[
     ['id', 'name', 'domain', 'url', 'sfin_url', 'server_messages'],

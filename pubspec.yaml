@@ -1,6 +1,6 @@
 name: simplefin_dart
 description: Dart client for the SimpleFIN API bridge (https://www.simplefin.org/protocol.html)
-version: 0.1.0
+version: 0.2.0
 repository: https://github.com/csells/simplefin_dart
 homepage: https://github.com/csells/simplefin_dart
 
