@@ -5,7 +5,6 @@ import 'package:args/args.dart';
 import 'package:csv/csv.dart';
 import 'package:dotenv/dotenv.dart' as dotenv;
 import 'package:simplefin_dart/simplefin_dart.dart';
-import 'package:simplefin_dart/src/utils/time_utils.dart';
 
 Future<void> main(List<String> arguments) async {
   final parsers = _ParserBundle.build();
@@ -79,8 +78,9 @@ _OutputFormat? _parseOutputFormatOrExit(ArgResults command) {
 /// Gets the access URL from command args or environment.
 /// Returns null and exits if no URL is available (after setting exitCode).
 String? _getAccessUrlOrExit(ArgResults command, Directory scriptDir) {
-  final accessUrlOverride =
-      (command['url'] as String?)?.trim().maybeEmptyToNull();
+  final accessUrlOverride = (command['url'] as String?)
+      ?.trim()
+      .maybeEmptyToNull();
   final envContext = _loadEnvContext(scriptDir);
   final accessUrl = accessUrlOverride ?? envContext.accessUrl;
   if (accessUrl == null) {
@@ -96,13 +96,10 @@ String? _getAccessUrlOrExit(ArgResults command, Directory scriptDir) {
 }
 
 /// Wraps data with server messages for JSON output.
-dynamic _wrapWithServerMessages(
-  dynamic data,
-  List<String> serverMessages,
-) =>
+dynamic _wrapWithServerMessages(dynamic data, List<String> serverMessages) =>
     serverMessages.isEmpty
-        ? data
-        : {'server-messages': serverMessages, 'data': data};
+    ? data
+    : {'server-messages': serverMessages, 'data': data};
 
 Future<void> _handleClaim(
   ArgResults command,
@@ -564,14 +561,15 @@ Future<void> _handleDemo(
       stdout.writeln('❌ No accounts found. Skipping transactions demo.');
     } else {
       final firstAccount = accountSet.accounts.first;
-      final sevenDaysAgo =
-          DateTime.now().toUtc().subtract(const Duration(days: 7));
-      final startDateEpoch = toEpochSeconds(sevenDaysAgo);
+      final sevenDaysAgo = DateTime.now().toUtc().subtract(
+        const Duration(days: 7),
+      );
+      final startDate = sevenDaysAgo.toUtc().toIso8601String();
 
       stdout.writeln(
         '📋 Step 4: Fetching transactions for "${firstAccount.name}"...',
       );
-      stdout.writeln('   (from ${sevenDaysAgo.toIso8601String()})');
+      stdout.writeln('   (from $startDate)');
       stdout.writeln('-' * 60);
       stdout.writeln();
 
@@ -599,14 +597,14 @@ Future<void> _handleDemo(
             .toList();
 
         stdout.writeln(
-          '💻 Command: dart run example/main.dart t -a ${firstAccount.id} -s $startDateEpoch',
+          '💻 Command: dart run example/main.dart t -a ${firstAccount.id} -s $startDate',
         );
         stdout.writeln('✓ Text format:');
         _printTransactionsMarkdown(transactions, txAccountSet.serverMessages);
         stdout.writeln();
 
         stdout.writeln(
-          '💻 Command: dart run example/main.dart t -a ${firstAccount.id} -s $startDateEpoch -f json',
+          '💻 Command: dart run example/main.dart t -a ${firstAccount.id} -s $startDate -f json',
         );
         stdout.writeln('✓ JSON format:');
         final txJsonData = transactions
@@ -620,7 +618,7 @@ Future<void> _handleDemo(
         stdout.writeln();
 
         stdout.writeln(
-          '💻 Command: dart run example/main.dart t -a ${firstAccount.id} -s $startDateEpoch -f csv',
+          '💻 Command: dart run example/main.dart t -a ${firstAccount.id} -s $startDate -f csv',
         );
         stdout.writeln('✓ CSV format:');
         stdout.writeln(

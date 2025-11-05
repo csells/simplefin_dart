@@ -79,12 +79,4 @@ void main() {
       expect(accountSet.accounts, isEmpty);
     });
   });
-
-  group('SimplefinAccessClient validation', () {
-    test('getAccounts rejects startDate after endDate', () {
-      // This test would require creating a client, which needs credentials
-      // For now, documenting that this should be tested with integration tests
-      // or by mocking the HTTP client
-    });
-  });
 }
