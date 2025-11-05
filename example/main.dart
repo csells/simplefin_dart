@@ -5,6 +5,7 @@ import 'package:args/args.dart';
 import 'package:csv/csv.dart';
 import 'package:dotenv/dotenv.dart' as dotenv;
 import 'package:simplefin_dart/simplefin_dart.dart';
+import 'package:simplefin_dart/src/utils/time_utils.dart';
 
 Future<void> main(List<String> arguments) async {
   final parsers = _ParserBundle.build();
@@ -51,6 +52,9 @@ Future<void> main(List<String> arguments) async {
     case 'transactions':
     case 't':
       await _handleTransactions(command, parsers, scriptDir);
+    case 'demo':
+    case 'd':
+      await _handleDemo(command, parsers, scriptDir);
     default:
       stderr.writeln('Unknown command "${command.name}".');
       _printTopLevelUsage(parsers);
@@ -412,6 +416,231 @@ Future<void> _handleTransactions(
   }
 }
 
+Future<void> _handleDemo(
+  ArgResults command,
+  _ParserBundle parsers,
+  Directory scriptDir,
+) async {
+  if (command['help'] as bool) {
+    _printDemoUsage(parsers);
+    return;
+  }
+
+  final accessUrl = _getAccessUrlOrExit(command, scriptDir);
+  if (accessUrl == null) return;
+
+  stdout.writeln('🎬 SimpleFIN CLI Demo Mode');
+  stdout.writeln('=' * 60);
+  stdout.writeln('Running all commands to demonstrate functionality...');
+  stdout.writeln();
+
+  final credentials = SimplefinAccessCredentials.parse(accessUrl);
+  final client = SimplefinAccessClient(credentials: credentials);
+
+  try {
+    // Step 1: Fetch organizations in all formats
+    stdout.writeln('📋 Step 1: Fetching organizations...');
+    stdout.writeln('-' * 60);
+    stdout.writeln();
+
+    final accountSet = await client.getAccounts(balancesOnly: true);
+    final organizationsMap = <String, SimplefinOrganization>{};
+    for (final account in accountSet.accounts) {
+      final org = account.org;
+      organizationsMap.putIfAbsent(_organizationKey(org), () => org);
+    }
+    final organizations = organizationsMap.values.toList();
+
+    if (organizations.isEmpty) {
+      stdout.writeln('❌ No organizations found. Cannot continue demo.');
+      return;
+    }
+
+    stdout.writeln('💻 Command: dart run example/main.dart o');
+    stdout.writeln('✓ Text format:');
+    _printOrganizationsMarkdown(organizations, accountSet.serverMessages);
+    stdout.writeln();
+
+    stdout.writeln('💻 Command: dart run example/main.dart o -f json');
+    stdout.writeln('✓ JSON format:');
+    final orgJsonData = organizations.length == 1
+        ? _organizationJson(organizations.first)
+        : organizations.map(_organizationJson).toList();
+    stdout.writeln(
+      _jsonEncoder.convert(
+        _wrapWithServerMessages(orgJsonData, accountSet.serverMessages),
+      ),
+    );
+    stdout.writeln();
+
+    stdout.writeln('💻 Command: dart run example/main.dart o -f csv');
+    stdout.writeln('✓ CSV format:');
+    stdout.writeln(
+      _organizationsCsv(organizations, accountSet.serverMessages).trimRight(),
+    );
+    stdout.writeln();
+
+    // Step 2: Get first organization ID
+    final firstOrgId = organizations.first.id;
+    if (firstOrgId == null) {
+      stdout.writeln(
+        '❌ First organization has no ID. Skipping org filter demo.',
+      );
+    } else {
+      stdout.writeln(
+        '📋 Step 2: Fetching accounts for organization "$firstOrgId"...',
+      );
+      stdout.writeln('-' * 60);
+      stdout.writeln();
+
+      final filteredAccountSet = accountSet.filterByOrganizationId(firstOrgId);
+
+      stdout.writeln('💻 Command: dart run example/main.dart a -o $firstOrgId');
+      stdout.writeln('✓ Text format:');
+      _printAccountsMarkdown(
+        filteredAccountSet.accounts,
+        filteredAccountSet.serverMessages,
+      );
+      stdout.writeln();
+
+      stdout.writeln(
+        '💻 Command: dart run example/main.dart a -o $firstOrgId -f json',
+      );
+      stdout.writeln('✓ JSON format:');
+      stdout.writeln(
+        _jsonEncoder.convert(
+          _wrapWithServerMessages(
+            filteredAccountSet.accounts.map(_accountSummaryJson).toList(),
+            filteredAccountSet.serverMessages,
+          ),
+        ),
+      );
+      stdout.writeln();
+
+      stdout.writeln(
+        '💻 Command: dart run example/main.dart a -o $firstOrgId -f csv',
+      );
+      stdout.writeln('✓ CSV format:');
+      stdout.writeln(
+        _accountsCsv(
+          filteredAccountSet.accounts,
+          filteredAccountSet.serverMessages,
+        ).trimRight(),
+      );
+      stdout.writeln();
+    }
+
+    // Step 3: Fetch all accounts (no filter)
+    stdout.writeln('📋 Step 3: Fetching all accounts...');
+    stdout.writeln('-' * 60);
+    stdout.writeln();
+
+    stdout.writeln('💻 Command: dart run example/main.dart a');
+    stdout.writeln('✓ Text format:');
+    _printAccountsMarkdown(accountSet.accounts, accountSet.serverMessages);
+    stdout.writeln();
+
+    stdout.writeln('💻 Command: dart run example/main.dart a -f json');
+    stdout.writeln('✓ JSON format:');
+    stdout.writeln(
+      _jsonEncoder.convert(
+        _wrapWithServerMessages(
+          accountSet.accounts.map(_accountSummaryJson).toList(),
+          accountSet.serverMessages,
+        ),
+      ),
+    );
+    stdout.writeln();
+
+    stdout.writeln('💻 Command: dart run example/main.dart a -f csv');
+    stdout.writeln('✓ CSV format:');
+    stdout.writeln(
+      _accountsCsv(accountSet.accounts, accountSet.serverMessages).trimRight(),
+    );
+    stdout.writeln();
+
+    // Step 4: Fetch transactions for first account
+    if (accountSet.accounts.isEmpty) {
+      stdout.writeln('❌ No accounts found. Skipping transactions demo.');
+    } else {
+      final firstAccount = accountSet.accounts.first;
+      final sevenDaysAgo =
+          DateTime.now().toUtc().subtract(const Duration(days: 7));
+      final startDateEpoch = toEpochSeconds(sevenDaysAgo);
+
+      stdout.writeln(
+        '📋 Step 4: Fetching transactions for "${firstAccount.name}"...',
+      );
+      stdout.writeln('   (from ${sevenDaysAgo.toIso8601String()})');
+      stdout.writeln('-' * 60);
+      stdout.writeln();
+
+      final txAccountSet = await client.getAccounts(
+        startDate: sevenDaysAgo,
+        includePending: false,
+      );
+
+      final accounts = <SimplefinAccount>[];
+      for (final account in txAccountSet.accounts) {
+        if (account.id == firstAccount.id && account.transactions.isNotEmpty) {
+          accounts.add(account);
+        }
+      }
+
+      if (accounts.isEmpty) {
+        stdout.writeln('ℹ️  No transactions found in the last 7 days.');
+      } else {
+        final transactions = accounts
+            .expand(
+              (account) => account.transactions.map(
+                (transaction) => (account: account, transaction: transaction),
+              ),
+            )
+            .toList();
+
+        stdout.writeln(
+          '💻 Command: dart run example/main.dart t -a ${firstAccount.id} -s $startDateEpoch',
+        );
+        stdout.writeln('✓ Text format:');
+        _printTransactionsMarkdown(transactions, txAccountSet.serverMessages);
+        stdout.writeln();
+
+        stdout.writeln(
+          '💻 Command: dart run example/main.dart t -a ${firstAccount.id} -s $startDateEpoch -f json',
+        );
+        stdout.writeln('✓ JSON format:');
+        final txJsonData = transactions
+            .map((pair) => _transactionJson(pair.transaction, pair.account))
+            .toList();
+        stdout.writeln(
+          _jsonEncoder.convert(
+            _wrapWithServerMessages(txJsonData, txAccountSet.serverMessages),
+          ),
+        );
+        stdout.writeln();
+
+        stdout.writeln(
+          '💻 Command: dart run example/main.dart t -a ${firstAccount.id} -s $startDateEpoch -f csv',
+        );
+        stdout.writeln('✓ CSV format:');
+        stdout.writeln(
+          _transactionsCsv(accounts, txAccountSet.serverMessages).trimRight(),
+        );
+        stdout.writeln();
+      }
+    }
+
+    stdout.writeln('=' * 60);
+    stdout.writeln('🎉 Demo completed successfully!');
+    stdout.writeln();
+  } on SimplefinException catch (error) {
+    stderr.writeln('❌ Demo failed: $error');
+    exitCode = 1;
+  } finally {
+    client.close();
+  }
+}
+
 void _printAccountsMarkdown(
   Iterable<SimplefinAccount> accounts,
   List<String> serverMessages,
@@ -657,6 +886,7 @@ void _printTopLevelUsage(_ParserBundle parsers) {
     ..writeln('  accounts      Retrieve account balances.')
     ..writeln('  organizations List organizations referenced by accounts.')
     ..writeln('  transactions  Retrieve transactions for a specific account.')
+    ..writeln('  demo          Run all commands to demonstrate functionality.')
     ..writeln()
     ..writeln('Run `dart run example/main.dart <command> --help` for details.');
 }
@@ -694,6 +924,19 @@ void _printTransactionsUsage(_ParserBundle parsers) {
     ..writeln('Usage: dart run example/main.dart transactions [options]')
     ..writeln()
     ..writeln(parsers.transactions.usage);
+}
+
+void _printDemoUsage(_ParserBundle parsers) {
+  stdout
+    ..writeln('Usage: dart run example/main.dart demo [options]')
+    ..writeln()
+    ..writeln('Run all commands in sequence to demonstrate CLI functionality.')
+    ..writeln(
+      'This executes organizations, accounts, and transactions commands',
+    )
+    ..writeln('in all output formats (text, JSON, CSV) to showcase features.')
+    ..writeln()
+    ..writeln(parsers.demo.usage);
 }
 
 DateTime? _parseDateOption(String? rawValue) {
@@ -756,6 +999,7 @@ class _ParserBundle {
     required this.accounts,
     required this.organizations,
     required this.transactions,
+    required this.demo,
   });
 
   factory _ParserBundle.build() {
@@ -906,6 +1150,22 @@ class _ParserBundle {
       ..addCommand('transactions', transactions)
       ..addCommand('t', transactions);
 
+    final demo = ArgParser()
+      ..addFlag(
+        'help',
+        abbr: 'h',
+        negatable: false,
+        help: 'Show usage information for demo.',
+      )
+      ..addOption(
+        'url',
+        abbr: 'u',
+        help: 'SimpleFIN access URL (overrides environment).',
+      );
+    root
+      ..addCommand('demo', demo)
+      ..addCommand('d', demo);
+
     return _ParserBundle(
       root: root,
       claim: claim,
@@ -913,6 +1173,7 @@ class _ParserBundle {
       accounts: accounts,
       organizations: organizations,
       transactions: transactions,
+      demo: demo,
     );
   }
 
@@ -922,6 +1183,7 @@ class _ParserBundle {
   final ArgParser accounts;
   final ArgParser organizations;
   final ArgParser transactions;
+  final ArgParser demo;
 }
 
 class _EnvContext {

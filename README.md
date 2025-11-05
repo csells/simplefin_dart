@@ -114,6 +114,7 @@ Available commands:
   a (accounts)      Retrieve account balances.
   o (organizations) List organizations referenced by accounts.
   t (transactions)  Retrieve transactions for a specific account.
+  d (demo)          Run all commands to demonstrate functionality.
 
 Run `dart run example/main.dart <command> --help` for details.
 
@@ -139,6 +140,16 @@ Usage: dart run example/main.dart transactions [options]
     -a, --account=<ID>           Filter to a specific account when provided
     -f, --output-format=<FORMAT> Output as text, json, or csv (default: text)
     -h, --help                   Show usage information
+
+$ dart run example/main.dart demo --help
+Usage: dart run example/main.dart demo [options]
+
+Run all commands in sequence to demonstrate CLI functionality.
+This executes organizations, accounts, and transactions commands
+in all output formats (text, JSON, CSV) to showcase features.
+
+    -u, --url=<URL>  Override SIMPLEFIN_ACCESS_URL from .env (default: example/.env)
+    -h, --help       Show usage information
 ```
 
 ### Server Messages in CLI Output
@@ -186,6 +197,46 @@ acc456,Savings,USD,5000.00,...,
 The `server_messages` column appears at the end with semicolon-delimited quoted
 strings on the first data row only. When no server messages are present, the
 field/section is omitted entirely.
+
+## Demo Mode
+
+The CLI includes a `demo` command that runs through all features in sequence,
+showing the commands being executed and their output in all formats:
+
+```bash
+$ dart run example/main.dart demo
+
+🎬 SimpleFIN CLI Demo Mode
+============================================================
+Running all commands to demonstrate functionality...
+
+📋 Step 1: Fetching organizations...
+------------------------------------------------------------
+
+💻 Command: dart run example/main.dart o
+✓ Text format:
+[organizations in markdown format]
+
+💻 Command: dart run example/main.dart o -f json
+✓ JSON format:
+[organizations in JSON format]
+
+💻 Command: dart run example/main.dart o -f csv
+✓ CSV format:
+[organizations in CSV format]
+
+📋 Step 2: Fetching accounts for organization "org_123"...
+------------------------------------------------------------
+[... continues through all commands ...]
+
+🎉 Demo completed successfully!
+```
+
+This is useful for:
+- Testing the CLI after setup
+- Demonstrating all features at once
+- Verifying API connectivity
+- Checking output format consistency
 
 ## Resources
 
