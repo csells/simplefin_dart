@@ -6,8 +6,8 @@ import 'package:http/http.dart' as http;
 /// owns the client (and should close it) or if the client was provided
 /// externally.
 mixin HttpClientOwnership {
-  late final http.Client _httpClient;
-  late final bool _ownsClient;
+  http.Client? _httpClient;
+  bool? _ownsClient;
 
   /// Initializes the HTTP client.
   ///
@@ -19,14 +19,24 @@ mixin HttpClientOwnership {
   }
 
   /// The HTTP client instance being used.
-  http.Client get httpClient => _httpClient;
+  ///
+  /// Throws [StateError] if [initHttpClient] has not been called.
+  http.Client get httpClient {
+    final client = _httpClient;
+    if (client == null) {
+      throw StateError(
+        'HTTP client not initialized. Call initHttpClient() first.',
+      );
+    }
+    return client;
+  }
 
   /// Closes the HTTP client if this object owns it.
   ///
   /// Should be called when this object is no longer needed to free resources.
   void closeHttpClient() {
-    if (_ownsClient) {
-      _httpClient.close();
+    if (_ownsClient ?? false) {
+      _httpClient?.close();
     }
   }
 }

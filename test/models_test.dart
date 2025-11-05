@@ -1,4 +1,6 @@
-import 'package:simplefin_dart/src/models.dart';
+import 'package:simplefin_dart/src/models/account.dart';
+import 'package:simplefin_dart/src/models/account_set.dart';
+import 'package:simplefin_dart/src/models/bridge_info.dart';
 import 'package:test/test.dart';
 
 void main() {

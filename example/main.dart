@@ -58,6 +58,48 @@ Future<void> main(List<String> arguments) async {
   }
 }
 
+// Helper functions to reduce duplication
+
+/// Parses the output format from command args and exits on error.
+/// Returns null if there was an error (after setting exitCode).
+_OutputFormat? _parseOutputFormatOrExit(ArgResults command) {
+  try {
+    return _parseOutputFormat(command['output-format'] as String?);
+  } on FormatException catch (error) {
+    stderr.writeln(error.message);
+    exitCode = 64;
+    return null;
+  }
+}
+
+/// Gets the access URL from command args or environment.
+/// Returns null and exits if no URL is available (after setting exitCode).
+String? _getAccessUrlOrExit(ArgResults command, Directory scriptDir) {
+  final accessUrlOverride =
+      (command['url'] as String?)?.trim().maybeEmptyToNull();
+  final envContext = _loadEnvContext(scriptDir);
+  final accessUrl = accessUrlOverride ?? envContext.accessUrl;
+  if (accessUrl == null) {
+    stderr
+      ..writeln('No access URL provided.')
+      ..writeln(
+        'Set SIMPLEFIN_ACCESS_URL in ${envContext.displayPath} or pass --url.',
+      );
+    exitCode = 64;
+    return null;
+  }
+  return accessUrl;
+}
+
+/// Wraps data with server messages for JSON output.
+dynamic _wrapWithServerMessages(
+  dynamic data,
+  List<String> serverMessages,
+) =>
+    serverMessages.isEmpty
+        ? data
+        : {'server-messages': serverMessages, 'data': data};
+
 Future<void> _handleClaim(
   ArgResults command,
   _ParserBundle parsers,
@@ -134,28 +176,11 @@ Future<void> _handleAccounts(
     return;
   }
 
-  _OutputFormat format;
-  try {
-    format = _parseOutputFormat(command['output-format'] as String?);
-  } on FormatException catch (error) {
-    stderr.writeln(error.message);
-    exitCode = 64;
-    return;
-  }
-  final accessUrlOverride = (command['url'] as String?)
-      ?.trim()
-      .maybeEmptyToNull();
-  final envContext = _loadEnvContext(scriptDir);
-  final accessUrl = accessUrlOverride ?? envContext.accessUrl;
-  if (accessUrl == null) {
-    stderr
-      ..writeln('No access URL provided.')
-      ..writeln(
-        'Set SIMPLEFIN_ACCESS_URL in ${envContext.displayPath} or pass --url.',
-      );
-    exitCode = 64;
-    return;
-  }
+  final format = _parseOutputFormatOrExit(command);
+  if (format == null) return;
+
+  final accessUrl = _getAccessUrlOrExit(command, scriptDir);
+  if (accessUrl == null) return;
 
   final orgIdFilter = (command['org-id'] as String?)?.trim().maybeEmptyToNull();
   final credentials = SimplefinAccessCredentials.parse(accessUrl);
@@ -180,12 +205,10 @@ Future<void> _handleAccounts(
       case _OutputFormat.text:
         _printAccountsMarkdown(accountSet.accounts, accountSet.serverMessages);
       case _OutputFormat.json:
-        final jsonOutput = accountSet.serverMessages.isEmpty
-            ? accountSet.accounts.map(_accountSummaryJson).toList()
-            : {
-                'server-messages': accountSet.serverMessages,
-                'data': accountSet.accounts.map(_accountSummaryJson).toList(),
-              };
+        final jsonOutput = _wrapWithServerMessages(
+          accountSet.accounts.map(_accountSummaryJson).toList(),
+          accountSet.serverMessages,
+        );
         stdout.writeln(_jsonEncoder.convert(jsonOutput));
       case _OutputFormat.csv:
         stdout.writeln(
@@ -213,29 +236,11 @@ Future<void> _handleOrganizations(
     return;
   }
 
-  _OutputFormat format;
-  try {
-    format = _parseOutputFormat(command['output-format'] as String?);
-  } on FormatException catch (error) {
-    stderr.writeln(error.message);
-    exitCode = 64;
-    return;
-  }
+  final format = _parseOutputFormatOrExit(command);
+  if (format == null) return;
 
-  final accessUrlOverride = (command['url'] as String?)
-      ?.trim()
-      .maybeEmptyToNull();
-  final envContext = _loadEnvContext(scriptDir);
-  final accessUrl = accessUrlOverride ?? envContext.accessUrl;
-  if (accessUrl == null) {
-    stderr
-      ..writeln('No access URL provided.')
-      ..writeln(
-        'Set SIMPLEFIN_ACCESS_URL in ${envContext.displayPath} or pass --url.',
-      );
-    exitCode = 64;
-    return;
-  }
+  final accessUrl = _getAccessUrlOrExit(command, scriptDir);
+  if (accessUrl == null) return;
 
   final credentials = SimplefinAccessCredentials.parse(accessUrl);
   final client = SimplefinAccessClient(credentials: credentials);
@@ -266,9 +271,10 @@ Future<void> _handleOrganizations(
         final jsonData = organizations.length == 1
             ? _organizationJson(organizations.first)
             : organizations.map(_organizationJson).toList();
-        final jsonOutput = accountSet.serverMessages.isEmpty
-            ? jsonData
-            : {'server-messages': accountSet.serverMessages, 'data': jsonData};
+        final jsonOutput = _wrapWithServerMessages(
+          jsonData,
+          accountSet.serverMessages,
+        );
         stdout.writeln(_jsonEncoder.convert(jsonOutput));
       case _OutputFormat.csv:
         stdout.writeln(
@@ -298,28 +304,11 @@ Future<void> _handleTransactions(
 
   final accountId = (command['account'] as String?)?.trim().maybeEmptyToNull();
 
-  _OutputFormat format;
-  try {
-    format = _parseOutputFormat(command['output-format'] as String?);
-  } on FormatException catch (error) {
-    stderr.writeln(error.message);
-    exitCode = 64;
-    return;
-  }
-  final accessUrlOverride = (command['url'] as String?)
-      ?.trim()
-      .maybeEmptyToNull();
-  final envContext = _loadEnvContext(scriptDir);
-  final accessUrl = accessUrlOverride ?? envContext.accessUrl;
-  if (accessUrl == null) {
-    stderr
-      ..writeln('No access URL provided.')
-      ..writeln(
-        'Set SIMPLEFIN_ACCESS_URL in ${envContext.displayPath} or pass --url.',
-      );
-    exitCode = 64;
-    return;
-  }
+  final format = _parseOutputFormatOrExit(command);
+  if (format == null) return;
+
+  final accessUrl = _getAccessUrlOrExit(command, scriptDir);
+  if (accessUrl == null) return;
 
   DateTime? startDate;
   DateTime? endDate;
@@ -405,9 +394,10 @@ Future<void> _handleTransactions(
         final jsonData = transactions
             .map((pair) => _transactionJson(pair.transaction, pair.account))
             .toList();
-        final jsonOutput = accountSet.serverMessages.isEmpty
-            ? jsonData
-            : {'server-messages': accountSet.serverMessages, 'data': jsonData};
+        final jsonOutput = _wrapWithServerMessages(
+          jsonData,
+          accountSet.serverMessages,
+        );
         stdout.writeln(_jsonEncoder.convert(jsonOutput));
       case _OutputFormat.csv:
         stdout.writeln(

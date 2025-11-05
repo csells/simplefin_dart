@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'exceptions.dart';
 import 'utils/uri_builder.dart';
+import 'utils/validation_helpers.dart';
 
 /// Representation of the temporary setup token that a user creates via the
 /// SimpleFIN Bridge UI. The token is Base64 encoded and resolves to the
@@ -14,29 +15,12 @@ class SimplefinSetupToken {
   /// Throws [SimplefinInvalidSetupToken] when the token cannot be decoded or
   /// does not resolve to a valid claim URI.
   factory SimplefinSetupToken.parse(String token) {
-    final cleaned = token.trim();
-    if (cleaned.isEmpty) {
-      throw SimplefinInvalidSetupToken('Setup token must not be empty.');
-    }
+    final cleaned = token.requireNonEmpty('Setup token');
 
-    final decodedBytes = _decodeBase64(cleaned);
+    final decodedBytes = decodeBase64WithFallback(cleaned);
     final decoded = utf8.decode(decodedBytes);
 
-    late final Uri claimUri;
-    try {
-      claimUri = Uri.parse(decoded);
-    } on FormatException catch (error) {
-      throw SimplefinInvalidSetupToken(
-        'Decoded setup token is not a valid URI.',
-        cause: error,
-      );
-    }
-
-    if (!claimUri.hasScheme || claimUri.host.isEmpty) {
-      throw SimplefinInvalidSetupToken(
-        'Decoded setup token must include a scheme and host.',
-      );
-    }
+    final claimUri = parseAndValidateUri(decoded, 'Decoded setup token');
 
     return SimplefinSetupToken._(cleaned, claimUri);
   }
@@ -46,26 +30,6 @@ class SimplefinSetupToken {
 
   /// Claim endpoint resolved from the setup token.
   final Uri claimUri;
-
-  static List<int> _decodeBase64(String token) {
-    final normalized = token.replaceAll(
-      RegExp(r'\s+'),
-      '',
-    ); // Defensive whitespace removal.
-
-    try {
-      return base64.decode(base64.normalize(normalized));
-    } on FormatException {
-      try {
-        return base64Url.decode(base64Url.normalize(normalized));
-      } on FormatException catch (error) {
-        throw SimplefinInvalidSetupToken(
-          'Setup token is not valid Base64.',
-          cause: error,
-        );
-      }
-    }
-  }
 }
 
 /// Credentials extracted from a SimpleFIN Access URL. Access URLs embed the
@@ -80,26 +44,8 @@ class SimplefinAccessCredentials {
 
   /// Parses a SimpleFIN access [url] into credential components.
   factory SimplefinAccessCredentials.parse(String url) {
-    final trimmed = url.trim();
-    if (trimmed.isEmpty) {
-      throw SimplefinDataFormatException('Access URL must not be empty.');
-    }
-
-    late final Uri parsed;
-    try {
-      parsed = Uri.parse(trimmed);
-    } on FormatException catch (error) {
-      throw SimplefinDataFormatException(
-        'Access URL is not a valid URI.',
-        cause: error,
-      );
-    }
-
-    if (!parsed.hasScheme || parsed.host.isEmpty) {
-      throw SimplefinDataFormatException(
-        'Access URL must include a scheme and host.',
-      );
-    }
+    final trimmed = url.requireNonEmpty('Access URL');
+    final parsed = parseAndValidateUri(trimmed, 'Access URL');
 
     final colonIndex = parsed.userInfo.indexOf(':');
     if (colonIndex < 0) {

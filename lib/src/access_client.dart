@@ -3,8 +3,9 @@ import 'package:http/http.dart' as http;
 import 'constants.dart';
 import 'credentials.dart';
 import 'exceptions.dart';
-import 'models.dart';
+import 'models/account_set.dart';
 import 'utils/http_client_ownership.dart';
+import 'utils/http_helpers.dart';
 import 'utils/json_parser.dart';
 import 'utils/time_utils.dart';
 
@@ -43,30 +44,25 @@ class SimplefinAccessClient with HttpClientOwnership {
       );
     }
 
-    final queryParameters = <String, dynamic>{};
-
-    if (startDate != null) {
-      queryParameters['start-date'] = toEpochSeconds(startDate).toString();
-    }
-    if (endDate != null) {
-      queryParameters['end-date'] = toEpochSeconds(endDate).toString();
-    }
-    if (includePending) {
-      queryParameters['pending'] = '1';
-    }
-    if (balancesOnly) {
-      queryParameters['balances-only'] = '1';
-    }
-    final accounts = accountIds?.where((id) => id.isNotEmpty).toList();
-    if (accounts != null && accounts.isNotEmpty) {
-      queryParameters['account'] = accounts;
-    }
+    final queryParameters = _buildAccountQueryParameters(
+      startDate: startDate,
+      endDate: endDate,
+      includePending: includePending,
+      accountIds: accountIds,
+      balancesOnly: balancesOnly,
+    );
 
     final uri = credentials.endpointUri([
       'accounts',
     ], queryParameters: queryParameters.isEmpty ? null : queryParameters);
 
-    final response = await httpClient.get(uri, headers: _headers());
+    final response = await httpClient.get(
+      uri,
+      headers: buildHeaders(
+        userAgent: userAgent,
+        authorizationValue: credentials.basicAuthHeaderValue,
+      ),
+    );
     if (response.statusCode != 200) {
       throw SimplefinApiException(
         uri: uri,
@@ -90,9 +86,33 @@ class SimplefinAccessClient with HttpClientOwnership {
     closeHttpClient();
   }
 
-  Map<String, String> _headers() => {
-    'User-Agent': userAgent,
-    'Accept': 'application/json',
-    'Authorization': credentials.basicAuthHeaderValue,
-  };
+  /// Builds query parameters for the accounts endpoint.
+  Map<String, dynamic> _buildAccountQueryParameters({
+    DateTime? startDate,
+    DateTime? endDate,
+    bool includePending = false,
+    Iterable<String>? accountIds,
+    bool balancesOnly = false,
+  }) {
+    final queryParameters = <String, dynamic>{};
+
+    if (startDate != null) {
+      queryParameters['start-date'] = toEpochSeconds(startDate).toString();
+    }
+    if (endDate != null) {
+      queryParameters['end-date'] = toEpochSeconds(endDate).toString();
+    }
+    if (includePending) {
+      queryParameters['pending'] = '1';
+    }
+    if (balancesOnly) {
+      queryParameters['balances-only'] = '1';
+    }
+    final accounts = accountIds?.where((id) => id.isNotEmpty).toList();
+    if (accounts != null && accounts.isNotEmpty) {
+      queryParameters['account'] = accounts;
+    }
+
+    return queryParameters;
+  }
 }

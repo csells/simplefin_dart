@@ -3,8 +3,9 @@ import 'package:http/http.dart' as http;
 import 'constants.dart';
 import 'credentials.dart';
 import 'exceptions.dart';
-import 'models.dart';
+import 'models/bridge_info.dart';
 import 'utils/http_client_ownership.dart';
+import 'utils/http_helpers.dart';
 import 'utils/json_parser.dart';
 import 'utils/uri_builder.dart';
 
@@ -29,7 +30,10 @@ class SimplefinBridgeClient with HttpClientOwnership {
   /// bridge instance.
   Future<SimplefinBridgeInfo> getInfo() async {
     final uri = buildUri(root, ['info']);
-    final response = await httpClient.get(uri, headers: _headers());
+    final response = await httpClient.get(
+      uri,
+      headers: buildHeaders(userAgent: userAgent),
+    );
     if (response.statusCode != 200) {
       throw SimplefinApiException(
         uri: uri,
@@ -55,7 +59,7 @@ class SimplefinBridgeClient with HttpClientOwnership {
     final parsedToken = SimplefinSetupToken.parse(setupToken);
     final response = await httpClient.post(
       parsedToken.claimUri,
-      headers: _headers(accept: 'text/plain'),
+      headers: buildHeaders(userAgent: userAgent, accept: 'text/plain'),
     );
 
     if (response.statusCode != 200) {
@@ -83,9 +87,4 @@ class SimplefinBridgeClient with HttpClientOwnership {
   void close() {
     closeHttpClient();
   }
-
-  Map<String, String> _headers({String accept = 'application/json'}) => {
-    'User-Agent': userAgent,
-    'Accept': accept,
-  };
 }
