@@ -37,11 +37,11 @@ class SimplefinBridgeInfo {
 
 /// Structured response returned by the SimpleFIN `/accounts` endpoint.
 class SimplefinAccountSet {
-  /// Creates a response wrapper containing [errors] and [accounts].
+  /// Creates a response wrapper containing [serverMessages] and [accounts].
   SimplefinAccountSet({
-    required Iterable<String> errors,
+    required Iterable<String> serverMessages,
     required Iterable<SimplefinAccount> accounts,
-  }) : errors = List.unmodifiable(errors),
+  }) : serverMessages = List.unmodifiable(serverMessages),
        accounts = List.unmodifiable(accounts);
 
   /// Parses an account set returned by a SimpleFIN server.
@@ -52,7 +52,7 @@ class SimplefinAccountSet {
         'Expected "errors" to be a list in account set.',
       );
     }
-    final errors = errorsField.map((error) {
+    final serverMessages = errorsField.map((error) {
       if (error is! String) {
         throw SimplefinDataFormatException(
           'Each item in "errors" must be a string. Found $error',
@@ -77,18 +77,21 @@ class SimplefinAccountSet {
       return SimplefinAccount.fromJson(account);
     });
 
-    return SimplefinAccountSet(errors: errors, accounts: accounts);
+    return SimplefinAccountSet(
+      serverMessages: serverMessages,
+      accounts: accounts,
+    );
   }
 
   /// Informational messages reported by the bridge.
-  final List<String> errors;
+  final List<String> serverMessages;
 
   /// Collection of accounts returned by the server.
   final List<SimplefinAccount> accounts;
 
   /// Converts the account set to a JSON representation.
   Map<String, dynamic> toJson() => {
-    'errors': errors,
+    'errors': serverMessages,
     'accounts': accounts.map((account) => account.toJson()).toList(),
   };
 }
@@ -438,4 +441,23 @@ int _parseEpochSeconds(Object? value, String fieldName) {
   throw SimplefinDataFormatException(
     '"$fieldName" must be provided as an integer Unix timestamp.',
   );
+}
+
+/// Extension methods for filtering [SimplefinAccountSet] results.
+extension SimplefinAccountSetFilters on SimplefinAccountSet {
+  /// Returns a new [SimplefinAccountSet] containing only accounts
+  /// that belong to the specified organization ID.
+  ///
+  /// Accounts without an organization ID are excluded from the result.
+  SimplefinAccountSet filterByOrganizationId(String orgId) {
+    final filtered = accounts.where((account) {
+      final accountOrgId = account.org.id;
+      return accountOrgId != null && accountOrgId == orgId;
+    }).toList();
+
+    return SimplefinAccountSet(
+      serverMessages: serverMessages,
+      accounts: filtered,
+    );
+  }
 }

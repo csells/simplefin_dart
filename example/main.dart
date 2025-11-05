@@ -157,31 +157,17 @@ Future<void> _handleAccounts(
     return;
   }
 
-  final orgIdFilter = (command['org-id'] as String?)
-      ?.trim()
-      .maybeEmptyToNull();
+  final orgIdFilter = (command['org-id'] as String?)?.trim().maybeEmptyToNull();
   final credentials = SimplefinAccessCredentials.parse(accessUrl);
   final client = SimplefinAccessClient(credentials: credentials);
   try {
-    final accountSet = await client.getAccounts(
-      balancesOnly: true,
-    );
+    var accountSet = await client.getAccounts(balancesOnly: true);
 
-    _printBridgeErrors(accountSet.errors);
-
-    final List<SimplefinAccount> accounts;
-    if (orgIdFilter == null) {
-      accounts = accountSet.accounts;
-    } else {
-      accounts = accountSet.accounts
-          .where((account) {
-            final orgId = account.org.id;
-            return orgId != null && orgId == orgIdFilter;
-          })
-          .toList();
+    if (orgIdFilter != null) {
+      accountSet = accountSet.filterByOrganizationId(orgIdFilter);
     }
 
-    if (accounts.isEmpty) {
+    if (accountSet.accounts.isEmpty) {
       stdout.writeln(
         orgIdFilter == null
             ? 'No accounts returned by the bridge.'
@@ -192,16 +178,22 @@ Future<void> _handleAccounts(
 
     switch (format) {
       case _OutputFormat.text:
-        _printAccountsMarkdown(accounts);
+        _printAccountsMarkdown(accountSet.accounts, accountSet.serverMessages);
       case _OutputFormat.json:
-        stdout.writeln(
-          _jsonEncoder.convert(
-            accounts.map(_accountSummaryJson).toList(),
-          ),
-        );
+        final jsonOutput = accountSet.serverMessages.isEmpty
+            ? accountSet.accounts.map(_accountSummaryJson).toList()
+            : {
+                'server-messages': accountSet.serverMessages,
+                'data': accountSet.accounts.map(_accountSummaryJson).toList(),
+              };
+        stdout.writeln(_jsonEncoder.convert(jsonOutput));
       case _OutputFormat.csv:
         stdout.writeln(
-          _accountsCsv(accounts, includeTransactions: false).trimRight(),
+          _accountsCsv(
+            accountSet.accounts,
+            accountSet.serverMessages,
+            includeTransactions: false,
+          ).trimRight(),
         );
     }
   } on SimplefinException catch (error) {
@@ -251,8 +243,6 @@ Future<void> _handleOrganizations(
   try {
     final accountSet = await client.getAccounts(balancesOnly: true);
 
-    _printBridgeErrors(accountSet.errors);
-
     final organizationsMap = <String, SimplefinOrganization>{};
     for (final account in accountSet.accounts) {
       final org = account.org;
@@ -272,17 +262,22 @@ Future<void> _handleOrganizations(
 
     switch (format) {
       case _OutputFormat.text:
-        _printOrganizationsMarkdown(organizations);
+        _printOrganizationsMarkdown(organizations, accountSet.serverMessages);
       case _OutputFormat.json:
-        stdout.writeln(
-          _jsonEncoder.convert(
-            organizations.length == 1
-                ? _organizationJson(organizations.first)
-                : organizations.map(_organizationJson).toList(),
-          ),
-        );
+        final jsonData = organizations.length == 1
+            ? _organizationJson(organizations.first)
+            : organizations.map(_organizationJson).toList();
+        final jsonOutput = accountSet.serverMessages.isEmpty
+            ? jsonData
+            : {'server-messages': accountSet.serverMessages, 'data': jsonData};
+        stdout.writeln(_jsonEncoder.convert(jsonOutput));
       case _OutputFormat.csv:
-        stdout.writeln(_organizationsCsv(organizations).trimRight());
+        stdout.writeln(
+          _organizationsCsv(
+            organizations,
+            accountSet.serverMessages,
+          ).trimRight(),
+        );
     }
   } on SimplefinException catch (error) {
     stderr.writeln('Failed to fetch organizations: $error');
@@ -353,8 +348,6 @@ Future<void> _handleTransactions(
       balancesOnly: false,
     );
 
-    _printBridgeErrors(accountSet.errors);
-
     if (accountSet.accounts.isEmpty) {
       switch (format) {
         case _OutputFormat.text:
@@ -369,7 +362,10 @@ Future<void> _handleTransactions(
           return;
         case _OutputFormat.csv:
           stdout.writeln(
-            _transactionsCsv(const <SimplefinAccount>[]).trimRight(),
+            _transactionsCsv(
+              const <SimplefinAccount>[],
+              accountSet.serverMessages,
+            ).trimRight(),
           );
           return;
       }
@@ -394,7 +390,10 @@ Future<void> _handleTransactions(
           return;
         case _OutputFormat.csv:
           stdout.writeln(
-            _transactionsCsv(const <SimplefinAccount>[]).trimRight(),
+            _transactionsCsv(
+              const <SimplefinAccount>[],
+              accountSet.serverMessages,
+            ).trimRight(),
           );
           return;
       }
@@ -402,17 +401,19 @@ Future<void> _handleTransactions(
 
     switch (format) {
       case _OutputFormat.text:
-        _printTransactionsMarkdown(transactions);
+        _printTransactionsMarkdown(transactions, accountSet.serverMessages);
       case _OutputFormat.json:
-        stdout.writeln(
-          _jsonEncoder.convert(
-            transactions
-                .map((pair) => _transactionJson(pair.transaction, pair.account))
-                .toList(),
-          ),
-        );
+        final jsonData = transactions
+            .map((pair) => _transactionJson(pair.transaction, pair.account))
+            .toList();
+        final jsonOutput = accountSet.serverMessages.isEmpty
+            ? jsonData
+            : {'server-messages': accountSet.serverMessages, 'data': jsonData};
+        stdout.writeln(_jsonEncoder.convert(jsonOutput));
       case _OutputFormat.csv:
-        stdout.writeln(_transactionsCsv(accounts).trimRight());
+        stdout.writeln(
+          _transactionsCsv(accounts, accountSet.serverMessages).trimRight(),
+        );
     }
   } on SimplefinException catch (error) {
     stderr.writeln('Failed to fetch transactions: $error');
@@ -422,7 +423,18 @@ Future<void> _handleTransactions(
   }
 }
 
-void _printAccountsMarkdown(Iterable<SimplefinAccount> accounts) {
+void _printAccountsMarkdown(
+  Iterable<SimplefinAccount> accounts,
+  List<String> serverMessages,
+) {
+  if (serverMessages.isNotEmpty) {
+    stdout.writeln('# Server Messages');
+    for (final message in serverMessages) {
+      stdout.writeln('- $message');
+    }
+    stdout.writeln();
+  }
+
   for (final account in accounts) {
     stdout
       ..writeln('# Account: ${account.name}')
@@ -441,7 +453,18 @@ void _printAccountsMarkdown(Iterable<SimplefinAccount> accounts) {
   }
 }
 
-void _printOrganizationsMarkdown(List<SimplefinOrganization> organizations) {
+void _printOrganizationsMarkdown(
+  List<SimplefinOrganization> organizations,
+  List<String> serverMessages,
+) {
+  if (serverMessages.isNotEmpty) {
+    stdout.writeln('# Server Messages');
+    for (final message in serverMessages) {
+      stdout.writeln('- $message');
+    }
+    stdout.writeln();
+  }
+
   for (final org in organizations) {
     stdout
       ..writeln('# Organization: ${_organizationDisplayName(org)}')
@@ -456,7 +479,16 @@ void _printOrganizationsMarkdown(List<SimplefinOrganization> organizations) {
 void _printTransactionsMarkdown(
   List<({SimplefinAccount account, SimplefinTransaction transaction})>
   transactions,
+  List<String> serverMessages,
 ) {
+  if (serverMessages.isNotEmpty) {
+    stdout.writeln('# Server Messages');
+    for (final message in serverMessages) {
+      stdout.writeln('- $message');
+    }
+    stdout.writeln();
+  }
+
   for (final pair in transactions) {
     final account = pair.account;
     final transaction = pair.transaction;
@@ -467,9 +499,7 @@ void _printTransactionsMarkdown(
       ..writeln('- Amount: ${transaction.amount}')
       ..writeln('- Posted: ${transaction.posted.toUtc().toIso8601String()}');
     if (transaction.transactedAt != null) {
-      final transactedAt = transaction.transactedAt!
-          .toUtc()
-          .toIso8601String();
+      final transactedAt = transaction.transactedAt!.toUtc().toIso8601String();
       stdout.writeln('- Transacted At: $transactedAt');
     }
     stdout
@@ -479,9 +509,14 @@ void _printTransactionsMarkdown(
 }
 
 String _accountsCsv(
-  Iterable<SimplefinAccount> accounts, {
+  Iterable<SimplefinAccount> accounts,
+  List<String> serverMessages, {
   required bool includeTransactions,
 }) {
+  final serverMessagesField = serverMessages.isEmpty
+      ? ''
+      : serverMessages.map((msg) => '"$msg"').join(';');
+
   final rows = <List<dynamic>>[
     if (includeTransactions)
       [
@@ -499,6 +534,7 @@ String _accountsCsv(
         'description',
         'pending',
         'transacted_at',
+        'server_messages',
       ]
     else
       [
@@ -509,9 +545,11 @@ String _accountsCsv(
         'available_balance',
         'balance_date',
         'org_id',
+        'server_messages',
       ],
   ];
 
+  var isFirstRow = true;
   for (final account in accounts) {
     if (includeTransactions) {
       rows.add([
@@ -529,7 +567,9 @@ String _accountsCsv(
         '',
         '',
         '',
+        if (isFirstRow) serverMessagesField else '',
       ]);
+      isFirstRow = false;
     } else {
       rows.add([
         account.id,
@@ -539,7 +579,9 @@ String _accountsCsv(
         account.availableBalance?.toString() ?? '',
         account.balanceDate.toUtc().toIso8601String(),
         account.org.id ?? '',
+        if (isFirstRow) serverMessagesField else '',
       ]);
+      isFirstRow = false;
       continue;
     }
 
@@ -561,6 +603,7 @@ String _accountsCsv(
         transaction.description,
         transaction.pending,
         transaction.transactedAt?.toUtc().toIso8601String() ?? '',
+        '',
       ]);
     }
   }
@@ -605,7 +648,14 @@ Map<String, dynamic> _organizationJson(SimplefinOrganization organization) {
   return json;
 }
 
-String _transactionsCsv(List<SimplefinAccount> accounts) {
+String _transactionsCsv(
+  List<SimplefinAccount> accounts,
+  List<String> serverMessages,
+) {
+  final serverMessagesField = serverMessages.isEmpty
+      ? ''
+      : serverMessages.map((msg) => '"$msg"').join(';');
+
   final rows = <List<dynamic>>[
     [
       'account_id',
@@ -615,9 +665,11 @@ String _transactionsCsv(List<SimplefinAccount> accounts) {
       'description',
       'pending',
       'transacted_at',
+      'server_messages',
     ],
   ];
 
+  var isFirstRow = true;
   for (final account in accounts) {
     for (final transaction in account.transactions) {
       rows.add([
@@ -628,7 +680,9 @@ String _transactionsCsv(List<SimplefinAccount> accounts) {
         transaction.description,
         transaction.pending,
         transaction.transactedAt?.toUtc().toIso8601String() ?? '',
+        if (isFirstRow) serverMessagesField else '',
       ]);
+      isFirstRow = false;
     }
   }
 
@@ -649,11 +703,19 @@ Map<String, dynamic> _transactionJson(
     'transacted-at': transaction.transactedAt!.toUtc().toIso8601String(),
 };
 
-String _organizationsCsv(List<SimplefinOrganization> organizations) {
+String _organizationsCsv(
+  List<SimplefinOrganization> organizations,
+  List<String> serverMessages,
+) {
+  final serverMessagesField = serverMessages.isEmpty
+      ? ''
+      : serverMessages.map((msg) => '"$msg"').join(';');
+
   final rows = <List<dynamic>>[
-    ['id', 'name', 'domain', 'url', 'sfin_url'],
+    ['id', 'name', 'domain', 'url', 'sfin_url', 'server_messages'],
   ];
 
+  var isFirstRow = true;
   for (final org in organizations) {
     rows.add([
       org.id ?? '',
@@ -661,7 +723,9 @@ String _organizationsCsv(List<SimplefinOrganization> organizations) {
       org.domain ?? '',
       org.url?.toString() ?? '',
       org.sfinUrl.toString(),
+      if (isFirstRow) serverMessagesField else '',
     ]);
+    isFirstRow = false;
   }
 
   return const ListToCsvConverter().convert(rows);
@@ -716,16 +780,6 @@ void _printTransactionsUsage(_ParserBundle parsers) {
     ..writeln('Usage: dart run example/main.dart transactions [options]')
     ..writeln()
     ..writeln(parsers.transactions.usage);
-}
-
-void _printBridgeErrors(List<String> errors) {
-  if (errors.isEmpty) {
-    return;
-  }
-  stderr.writeln('Bridge reported the following messages:');
-  for (final error in errors) {
-    stderr.writeln('- $error');
-  }
 }
 
 DateTime? _parseDateOption(String? rawValue) {

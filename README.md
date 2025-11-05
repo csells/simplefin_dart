@@ -52,13 +52,33 @@ Future<void> sync(SimplefinAccessCredentials credentials) async {
       // Handle balances.
     }
 
-    if (accounts.errors.isNotEmpty) {
+    if (accounts.serverMessages.isNotEmpty) {
       // Surface bridge warnings back to the user.
     }
   } finally {
     client.close();
   }
 }
+```
+
+### 3. Handle Server Messages
+
+The SimpleFIN bridge may return informational messages alongside account data.
+These messages communicate system-wide conditions such as authentication issues,
+rate limits, or account sync problems. Access them via the `serverMessages`
+property on `SimplefinAccountSet`:
+
+```dart
+final accountSet = await client.getAccounts();
+
+// Check for server messages
+for (final message in accountSet.serverMessages) {
+  print('Server message: $message');
+}
+
+// Messages remain available after filtering
+final filtered = accountSet.filterByOrganizationId('org_123');
+print('Messages preserved: ${filtered.serverMessages}');
 ```
 
 ### SimpleFIN Tokens
@@ -120,6 +140,52 @@ Usage: dart run example/main.dart transactions [options]
     -f, --output-format=<FORMAT> Output as text, json, or csv (default: text)
     -h, --help                   Show usage information
 ```
+
+### Server Messages in CLI Output
+
+When the SimpleFIN bridge returns informational messages, the CLI includes them
+in all output formats:
+
+**Text/Markdown format:**
+```markdown
+# Server Messages
+- Account sync temporarily unavailable for savings account
+- Rate limit approaching - consider reducing polling frequency
+
+# Account: Checking
+- ID: acc123
+- Balance: 1500.00
+...
+```
+
+**JSON format:**
+```json
+{
+  "server-messages": [
+    "Account sync temporarily unavailable for savings account",
+    "Rate limit approaching - consider reducing polling frequency"
+  ],
+  "data": [
+    {
+      "id": "acc123",
+      "name": "Checking",
+      "balance": "1500.00",
+      ...
+    }
+  ]
+}
+```
+
+**CSV format:**
+```csv
+account_id,account_name,currency,balance,...,server_messages
+acc123,Checking,USD,1500.00,...,"Account sync temporarily unavailable for savings account";"Rate limit approaching - consider reducing polling frequency"
+acc456,Savings,USD,5000.00,...,
+```
+
+The `server_messages` column appears at the end with semicolon-delimited quoted
+strings on the first data row only. When no server messages are present, the
+field/section is omitted entirely.
 
 ## Resources
 
